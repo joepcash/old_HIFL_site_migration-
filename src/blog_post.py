@@ -3,6 +3,10 @@ from datetime import datetime as dt
 import re
 from word2number import w2n
 import pandas as pd
+import html2text
+import os
+
+from game import Game
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +19,7 @@ class BlogPost:
         self.week = self._get_week(self.title, date_outer_div)
         self.table = self._get_table(date_outer_div)
         self.teams = self._get_teams(self.table)
-        self._get_games(date_outer_div)
+        self.games = self._get_games(date_outer_div)
 
     @staticmethod
     def _get_date(date_outer_div):
@@ -58,3 +62,16 @@ class BlogPost:
 
         return teams
 
+    @staticmethod
+    def _get_games(date_outer_div):
+        # Convert html to text
+        html_text = html2text.html2text(str(date_outer_div))
+        # Remove bold markers
+        html_text = html_text.replace("**", "")
+        # Remove empty lines
+        html_text = os.linesep.join([s for s in html_text.splitlines() if s and not s.isspace()])
+
+        # Find games and split into parts using regex
+        games = re.findall(r"(.*)([\d]{1,2}) [–-] ([\d]{1,2})(.*)([\r\n]+[^\r\n]+)?", html_text)
+        # Save games as game object
+        return [Game(*g) for g in games]
