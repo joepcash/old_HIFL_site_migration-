@@ -1,10 +1,10 @@
 import logging
-from datetime import datetime as dt
 import re
 from word2number import w2n
 import pandas as pd
 import html2text
 import os
+import numpy as np
 
 from src.game import Game
 
@@ -95,15 +95,20 @@ class BlogPost:
             table = table.dropna(axis=1, how='all')
             if table.duplicated().any():
                 table.drop_duplicates(inplace=True)
-                table.columns = table.iloc[0]
-                self.table = table.drop(table.index[0])
-
-            return table
+            table.columns = table.iloc[0]
+            table = table.apply(pd.to_numeric, errors="ignore")
+            table = table.drop(table.index[0])
+            if 'Team' not in table:
+                table = table.rename(columns={table.select_dtypes(exclude=np.number).columns[0]: "Team"})
+            self.table = table
 
     def get_teams(self):
         if self.table is None:
             return
-        teams = self.table['Team'].to_list()
+        try:
+            teams = self.table['Team'].to_list()
+        except:
+            print("Hold up")
         for i in range(len(teams)):
             teams[i] = teams[i].replace("  ", " ")
 

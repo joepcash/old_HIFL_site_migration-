@@ -37,7 +37,7 @@ class Page:
         for date_outer in soup.find_all("div", class_="date-outer"):
             date = self.get_date(date_outer)
             season = self.get_season(date)
-            for post_outer in soup.find_all("div", class_="post-outer"):
+            for post_outer in date_outer.find_all("div", class_="post-outer"):
                 blog_post = BlogPost(self.url, self.filepath, post_outer, date, season).prepare(False)
                 if not blog_post.is_unneeded_post:
                     blog_posts.append(blog_post)

@@ -53,9 +53,35 @@ def get_all_games() -> None:
                     "season": g.season
                 }
                 games.append(game)
-        games_df = pd.DataFrame(games)
-        games_df.to_csv("data/games/games.csv", index=False)
         logger.info(f"{filename} complete")
+    games_df = pd.DataFrame(games)
+    games_df.to_csv("data/games/games.csv", index=False)
+    logger.info("Got all games")
+
+
+def get_final_table_all_seasons() -> None:
+    logger.info("Getting final tables")
+    page_dir = "data/pages"
+    blog_posts = []
+    tables = []
+    for file in os.listdir(page_dir):
+        filename = os.fsdecode(file)
+        filepath = os.path.join(page_dir, filename)
+        page = Page(None, filepath)
+        page.get_blog_posts("local")
+        for bp in page.blog_posts:
+            blog_posts.append(bp)
+            if bp.table is not None:
+                tables.append({"date": bp.date,
+                               "season": bp.season,
+                               "table": bp.table})
+        logger.info(f"{filename} complete")
+    tables_df = pd.DataFrame(tables)
+    tables_df = tables_df[tables_df.groupby("season")["date"].transform("max") == tables_df["date"]]
+    tables_df = tables_df.drop_duplicates(["date", "season"])
+    tables_df.apply(lambda x: x["table"].to_csv(f"data/final_tables/{x['season'].replace('/', '_')}.csv",
+                                                index=False), axis=1)
+    logger.info("Got all final tables")
 
 
 if __name__ == "__main__":
@@ -64,7 +90,8 @@ if __name__ == "__main__":
                         choices=[
                             "get_all_pages",
                             "get_all_players",
-                            "get_all_games"
+                            "get_all_games",
+                            "get_all_final_tables"
                         ])
     parser.add_argument("-b", type=str, default="http://hanoiinternationalfootballleague.blogspot.com/",
                         dest="blog_url", help="URL of the blog to operate on")
@@ -77,3 +104,5 @@ if __name__ == "__main__":
         get_all_pages(blog)
     elif args.operation == "get_all_games":
         get_all_games()
+    elif args.operation == "get_all_final_tables":
+        get_final_table_all_seasons()
