@@ -1,80 +1,108 @@
 import logging
 import re
+from fuzzywuzzy import process, fuzz
 
-from team import Team
+from src.team import Team
 
 logger = logging.getLogger(__name__)
 
 
 class Game:
 
-    def __init__(self, home_team, home_score, away_score, away_team, goals_str):
-        self.home_team = self._get_team(home_team)
-        self.home_score = home_score
-        self.away_score = away_score
-        self.away_team = self._get_team(away_team)
-        self.scorers = self._get_all_scorers(goals_str)
+    def __init__(self):
+        self.url = None
+        self.filepath = None
+        self.date = None
+        self.game_str = None
+        self.home_team = None
+        self.home_score = None
+        self.away_team = None
+        self.away_score = None
+        self.goals_str = None
+        self.scorers = None
+
+    def prepare(self, url, filepath, date, game_str, home_team, home_score, away_score, away_team, goals_str=None):
+        self.url = url
+        self.filepath = filepath
+        self.date = date
+        self.game_str = game_str
+        self.home_team = self._get_team_name(home_team)
+        self.home_score = int(home_score)
+        self.away_score = int(away_score)
+        self.away_team = self._get_team_name(away_team)
+        self.goals_str = goals_str
+
+        return self
 
     @staticmethod
     def _get_team(team_name):
         return Team(team_name)
 
-    def _get_all_scorers(self, goals_str):
-        if not goals_str or ('Goals' not in goals_str and 'goals' not in goals_str):
-            return None
-        else:
-            home_team = None
-            away_team = None
-            # Search for all variations of each team name in goals_str
-            for name in self.home_team.all_names:
-                if name in goals_str:
-                    home_team = name
-                    break
-            for name in self.away_team.all_names:
-                if name in goals_str:
-                    away_team = name
-                    break
+    @staticmethod
+    def _get_team_name(team_name_str):
+        # Find team name in string
+        team_name = re.findall(r"([^()]*)( (\((.*)\)))?", team_name_str)[0][0]
+        # Strip characters from each end of team name
+        team_name = team_name.strip(" #_*")
+        # Remove numbering from list at start of string. e.g., "4. Team Name"
+        team_name = re.sub(r"\d. ", "", team_name)
 
-            home_scorers = []
-            away_scorers = []
-            unknown_scorers = []
-            if home_team:
-                home_scorers = self._get_scorers(goals_str, home_team, away_team)
-            else:
-                logger.warning("Home team name not found in goal scorers string.")
-            if away_team:
-                away_scorers = self._get_scorers(goals_str, away_team, home_team)
-            else:
-                logger.warning("Away team name not found in goal scorers string.")
-            if not home_team and not away_team:
-                unknown_scorers = self._get_scorers(goals_str, None, None)
+        return team_name
 
-            return home_scorers + away_scorers + unknown_scorers
+    def get_all_scorers(self):
+        if self.goals_str is None:
+            return
+        regex_patterns = [f"Goals: ({self.home_team}):?([^;]*);? ?(?:({self.away_team}):?(.*))",
+                          r"Goals: (.*):(.*);( (.*):(.*).)?",
+                          r"Goals: (.*):(.*)\.(.*)(.*)(.*)",
+                          r"Goals: (.*):(.*)(.*)(.*)(.*)",
+                          f"Goals: ({self.home_team})(.*)(({self.away_team})(.*))"]
+        for reg in regex_patterns:
+            found = re.findall(reg, self.goals_str)
+            if found:
+                goal_str_els = [x.strip(" ,;") for x in list(found[0])]
+                break
+        team_scorers_strs = []
+        scorers = []
+        if goal_str_els[0]:
+            team_scorers_strs.append(tuple(goal_str_els[0:2]))
+        if goal_str_els[-2]:
+            team_scorers_strs.append(tuple(goal_str_els[-2:]))
+        for tss in team_scorers_strs:
+            team = process.extractOne(tss[0], [self.home_team, self.away_team])
+            if team[-1] > 90:
+                team = team[0]
+            else:
+                continue
+            scorers.extend(self._get_scorers_for_team(tss[1], team))
+
+        if self.home_score != sum([s["goals"] for s in scorers if s["team"] == self.home_team]) and \
+                goal_str_els[1] not in ["?"]:
+            logger.warning("There are unaccounted for home team goals")
+        if self.away_score != sum([s["goals"] for s in scorers if s["team"] == self.away_team]) and \
+                goal_str_els[-1] not in ["?"]:
+            logger.warning("There are unaccounted for away team goals")
+
+        self.scorers = scorers
 
     @staticmethod
-    def _get_scorers(goals_str, team_name, opponent_team_name):
-        # Remove all special characters except commas/dots, isolate list of scorers by team, and split into list using
-        # commas
-        scorers = re.sub(r'[^.,a-zA-Z0-9 \n\.]', "", goals_str.split(team_name, 1)[1].
-                         split(opponent_team_name, 1)[0]).split(",")
+    def _get_scorers_for_team(scorers_str, team):
+        scorers = [{"name": s.strip(), "team": team} for s in re.split(',(?![^\(\[]*[\]\)])', scorers_str)]
+        # If the scorer string isn't a name, then remove it
+        scorers = [s for s in scorers if s["name"] not in ["?"]]
+        # Count goals
         for i in range(len(scorers)):
-            # If the scorer string has no letters, then set it to None and skip to next scorer
-            if not re.search('[a-zA-Z]', scorers[i]):
-                scorers[i] = None
-                continue
-            # Strip starting/trailing characters/spaces
-            scorers[i] = scorers[i].strip(":,.; ")
-            # Check if the player has scored multiple goals using the format "playername x <no. of goals>"
-            multiple_goals = re.findall(r"(.*)x *([\d]+)", scorers[i])
-            if multiple_goals:
-                # Strip starting/trailing characters/spaces
-                player = multiple_goals[0][0].strip(":,.; ")
-                goals = int(multiple_goals[0][-1].strip(":,.; "))
+            # Check for multiple goals in the format "name x N"
+            multiple_goals_x = re.findall(r"(.*)x *([\d]+)", scorers[i]["name"])
+            # Check for multiple goals in the format "name (time, time, ...)"
+            multiple_goals_bracket = re.findall(r"(.*)\((.*)\)", scorers[i]["name"])
+            if multiple_goals_x:
+                scorers[i]["name"] = multiple_goals_x[0][0].strip()
+                scorers[i]["goals"] = int(multiple_goals_x[0][-1])
+            elif multiple_goals_bracket:
+                scorers[i]["name"] = multiple_goals_bracket[0][0].strip()
+                scorers[i]["goals"] = len(multiple_goals_bracket[0][-1].split(","))
             else:
-                # Strip starting/trailing characters/spaces
-                player = scorers[i].strip(":,.; ")
-                goals = 1
-            scorers[i] = {"player": player,
-                          "goals": goals,
-                          "team": team_name}
-        return [s for s in scorers if s is not None]
+                scorers[i]["goals"] = 1
+
+        return scorers

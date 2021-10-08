@@ -29,7 +29,7 @@ class Blog:
         return page_urls
 
     def save_all_pages(self):
-        Path("data/webpages").mkdir(parents=True, exist_ok=True)
+        Path("data/pages").mkdir(parents=True, exist_ok=True)
 
         urls = self.get_all_page_urls()
         for i in range(len(urls)):
@@ -37,6 +37,6 @@ class Blog:
             response = urllib.request.urlopen(urls[i])
             webContent = response.read()
 
-            f = open(f"data/webpages/page{i}.html", 'wb')
+            f = open(f"data/pages/page{i}.html", 'wb')
             f.write(webContent)
             f.close()

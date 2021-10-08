@@ -4,6 +4,8 @@ import os
 import json
 import argparse
 
+import pandas as pd
+
 from blog import Blog
 from page import Page
 
@@ -22,10 +24,37 @@ def configure_logging(logging_config_path: str) -> None:
     logger.info("Logging configuration set")
 
 
-def get_all_pages(blog_url: str) -> None:
-    logger.info(f"Getting all pages from {blog_url}")
-    blog = Blog(blog_url)
+def get_all_pages(blog: Blog) -> None:
+    logger.info(f"Getting all pages from {blog.url}")
     blog.save_all_pages()
+
+
+def get_all_games() -> None:
+    logger.info("Getting all games")
+    page_dir = "data/pages"
+    blog_posts = []
+    games = []
+    for file in os.listdir(page_dir):
+        filename = os.fsdecode(file)
+        filepath = os.path.join(page_dir, filename)
+        page = Page(None, filepath)
+        page.get_blog_posts("local")
+        for bp in page.blog_posts:
+            blog_posts.append(bp)
+            for g in bp.games:
+                game = {
+                    "home_team": g.home_team,
+                    "away_team": g.away_team,
+                    "home_score": g.home_score,
+                    "away_score": g.away_score,
+                    "filepath": g.filepath,
+                    "post_title": bp.title,
+                    "date": g.date
+                }
+                games.append(game)
+        games_df = pd.DataFrame(games)
+        games_df.to_csv("data/games/games.csv", index=False)
+        logger.info(f"{filename} complete")
 
 
 if __name__ == "__main__":
@@ -41,15 +70,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     configure_logging('logging_config.json')
+    blog = Blog(args.blog_url)
 
     if args.operation == 'get_all_pages':
-        get_all_pages(args.blog_url)
-
-    # blog = Blog("http://hanoiinternationalfootballleague.blogspot.com/")
-    # pages = [Page(url) for url in blog.get_all_page_urls()]
-    # page1 = Page("http://hanoiinternationalfootballleague.blogspot.com/")
-    # page2 = Page("http://hanoiinternationalfootballleague.blogspot.com/search?updated-max=2016-03-21T17:19:00%2B07:00&max-results=20&start=2&by-date=false")
-    # pages = [Page("http://hanoiinternationalfootballleague.blogspot.com/")]
-
-    # for page in pages:
-    #     page.get_blog_posts()
+        get_all_pages(blog)
+    elif args.operation == "get_all_games":
+        get_all_games()
