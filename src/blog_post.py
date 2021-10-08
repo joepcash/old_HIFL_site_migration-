@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 
 class BlogPost:
 
-    def __init__(self, url, filepath, post_html, date):
+    def __init__(self, url, filepath, post_html, date, season):
         self.url = url
         self.filepath = filepath
         self.post_html = post_html
         self.date = date
+        self.season = season
         self.title = None
         self.is_unneeded_post = False
         self.week = None
@@ -129,7 +130,7 @@ class BlogPost:
             games = self._get_scorers_str(games, html_text)
         # games = re.findall(r"(.*) ([\d]{1,2}) [–-] ([\d]{1,2}) (.*)([\r\n]+[^\r\n]+)?", html_text)
         # Save games as game object
-        games = [Game().prepare(self.url, self.filepath, self.date, *g) for g in games]
+        games = [Game().prepare(self.url, self.filepath, self.date, self.season, *g) for g in games]
         if get_scorers:
             games = [g.get_all_scorers() for g in games]
 

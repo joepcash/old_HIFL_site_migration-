@@ -36,8 +36,9 @@ class Page:
         soup = BeautifulSoup(html_data, 'html.parser')
         for date_outer in soup.find_all("div", class_="date-outer"):
             date = self.get_date(date_outer)
+            season = self.get_season(date)
             for post_outer in soup.find_all("div", class_="post-outer"):
-                blog_post = BlogPost(self.url, self.filepath, post_outer, date).prepare(False)
+                blog_post = BlogPost(self.url, self.filepath, post_outer, date, season).prepare(False)
                 if not blog_post.is_unneeded_post:
                     blog_posts.append(blog_post)
                     logger.debug([(g.home_team, g.home_score, g.away_score, g.away_team) for g in
@@ -51,3 +52,12 @@ class Page:
     def get_date(soup):
         return dt.strptime(list(list(soup.find_all("h2", class_="date-header")[0].children)[0].children)[0],
                            '%A, %B %d, %Y')
+
+    @staticmethod
+    def get_season(date):
+        year = date.year
+        month = date.month
+        if month <= 6:
+            return str(year - 1) + "/" + str(year)[-2:]
+        else:
+            return str(year) + "/" + str(year + 1)[-2:]

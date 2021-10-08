@@ -49,7 +49,8 @@ def get_all_games() -> None:
                     "away_score": g.away_score,
                     "filepath": g.filepath,
                     "post_title": bp.title,
-                    "date": g.date
+                    "date": g.date,
+                    "season": g.season
                 }
                 games.append(game)
         games_df = pd.DataFrame(games)

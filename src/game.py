@@ -13,6 +13,7 @@ class Game:
         self.url = None
         self.filepath = None
         self.date = None
+        self.season = None
         self.game_str = None
         self.home_team = None
         self.home_score = None
@@ -21,10 +22,11 @@ class Game:
         self.goals_str = None
         self.scorers = None
 
-    def prepare(self, url, filepath, date, game_str, home_team, home_score, away_score, away_team, goals_str=None):
+    def prepare(self, url, filepath, date, season, game_str, home_team, home_score, away_score, away_team, goals_str=None):
         self.url = url
         self.filepath = filepath
         self.date = date
+        self.season = season
         self.game_str = game_str
         self.home_team = self._get_team_name(home_team)
         self.home_score = int(home_score)
