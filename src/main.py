@@ -3,11 +3,13 @@ import logging.config
 import os
 import json
 import argparse
+from pathlib import Path
 
 import pandas as pd
 
 from blog import Blog
 from page import Page
+from season import Season
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,8 @@ def get_all_games() -> None:
                     "filepath": g.filepath,
                     "post_title": bp.title,
                     "date": g.date,
-                    "season": g.season
+                    "season": g.season,
+                    "competition": g.competition
                 }
                 games.append(game)
         logger.info(f"{filename} complete")
@@ -84,6 +87,20 @@ def get_final_table_all_seasons() -> None:
     logger.info("Got all final tables")
 
 
+def get_games_by_season() -> None:
+    games_df = pd.read_csv("data/games/games.csv")
+    page_dir = "data/final_tables"
+    seasons = []
+    for file in os.listdir(page_dir):
+        filename = os.fsdecode(file)
+        filepath = os.path.join(page_dir, filename)
+        season_name = Path(filename).stem.replace('_', '/')
+        df = pd.read_csv(filepath)
+        season_games = games_df[games_df['season'] == season_name]
+        season = Season(season_name, df, season_games)
+        season.fix_team_name_variation()
+        # seasons.append(season)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', type=str, dest='operation', help="The operation you want to run",
@@ -91,7 +108,8 @@ if __name__ == "__main__":
                             "get_all_pages",
                             "get_all_players",
                             "get_all_games",
-                            "get_all_final_tables"
+                            "get_all_final_tables",
+                            "play_seasons"
                         ])
     parser.add_argument("-b", type=str, default="http://hanoiinternationalfootballleague.blogspot.com/",
                         dest="blog_url", help="URL of the blog to operate on")
@@ -106,3 +124,5 @@ if __name__ == "__main__":
         get_all_games()
     elif args.operation == "get_all_final_tables":
         get_final_table_all_seasons()
+    elif args.operation == "play_seasons":
+        get_games_by_season()

@@ -24,7 +24,7 @@ class BlogPost:
         self.week = None
         self.table = None
         self.teams = None
-        self.games = None
+        self.games = []
 
     def prepare(self, get_scorers=True):
         self.get_title()
@@ -33,7 +33,7 @@ class BlogPost:
         self.get_week()
         self.get_table()
         self.get_teams()
-        self.get_games(get_scorers)
+        self.get_all_games_in_post(get_scorers)
 
         return self
 
@@ -105,45 +105,77 @@ class BlogPost:
     def get_teams(self):
         if self.table is None:
             return
-        try:
-            teams = self.table['Team'].to_list()
-        except:
-            print("Hold up")
+        teams = self.table['Team'].to_list()
         for i in range(len(teams)):
             teams[i] = teams[i].replace("  ", " ")
 
         self.teams = teams
 
-    def get_games(self, get_scorers=True):
+    def get_all_games_in_post(self, get_scorers=True):
         # Convert html to text
         html_text = html2text.html2text(str(self.post_html))
         # Remove bold markers
         html_text = html_text.replace("**", "")
+        # Remove underscores
+        html_text = html_text.replace("_", "")
+        # Remove odd situation where word "team" gets split up
+        html_text = html_text.replace("Tea m", "Team")
         # Remove empty lines
         html_text = os.linesep.join([s for s in html_text.splitlines() if s and not s.isspace()])
+        league_html, cup_html = self._separate_cup_games(html_text)
+        if league_html:
+            self.games.extend(self._get_games_from_html_snippet(league_html, "league", get_scorers))
+        if cup_html:
+            self.games.extend(self._get_games_from_html_snippet(cup_html, "cup", get_scorers))
 
+    def _get_games_from_html_snippet(self, html_text, competition, get_scorers=True):
         # Find games and split into parts using regex
         games = self.find_games_in_text(html_text)
         games = [list(g) for g in games]
         # Remove strings that were accidentally captured as games
         filtered_games = []
         for game in games:
-            if not any(s in game[0] for s in ["Match Day"]):
+            if not any(s in game[0] for s in ["Match Day", "Match abandoned", "Agg", "With it"]):
+                if game[1] == "FPT" and game[4] == "":
+                    game[4] = "Red Star"
                 filtered_games.append(game)
         games = filtered_games
         if get_scorers:
             games = self._get_scorers_str(games, html_text)
         # games = re.findall(r"(.*) ([\d]{1,2}) [–-] ([\d]{1,2}) (.*)([\r\n]+[^\r\n]+)?", html_text)
         # Save games as game object
-        games = [Game().prepare(self.url, self.filepath, self.date, self.season, *g) for g in games]
+        games = [Game().prepare(self.url, self.filepath, self.date, self.season, competition, *g) for g in games]
         if get_scorers:
             games = [g.get_all_scorers() for g in games]
 
-        self.games = games
+        return games
+
+    def _separate_cup_games(self, html_text):
+        if "cup" not in self.title.lower():
+            logger.debug(f"\"{self.title}\" is not a cup-related blog post")
+            return html_text, None
+        underlined = [u.text for u in self.post_html.find_all("u")]
+        league_games_heading = next(iter([u for u in underlined if re.findall(r"day \d{1,2}", u.lower())]), None)
+        cup_games_heading = next(iter([u for u in underlined if "cup" in u.lower()]), None)
+        if not league_games_heading or not cup_games_heading:
+            logger.debug(f"\"{self.title}\" has no cup/league headings, treating as a cup-only blog post")
+            return None, html_text
+        elif not league_games_heading:
+            logger.debug(f"\"{self.title}\" has no league headings, treating as a cup-only blog post")
+            return None, html_text
+        league_games = html_text.split(league_games_heading)[-1]
+        cup_games = html_text.split(cup_games_heading)[-1]
+        if len(league_games) > len(cup_games):
+            league_games = league_games.split(cup_games_heading)[0]
+        else:
+            cup_games = cup_games.split(league_games_heading)[0]
+
+        return league_games, cup_games
 
     @staticmethod
     def find_games_in_text(html_text):
-        return re.findall(r"((.*) ([\d]{1,2}) ?[–-] ?([\d]{1,2}) (.*?)(?: \(|\n|$)(?:(.*)\))?)", html_text)
+        return re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) ?[–-] ?([\d]{1,2}).? (.*?)(?: *\(|\n|$)(?:(.*?)\))?)",
+                          html_text)
 
     @staticmethod
     def _get_scorers_str(games, html_text):

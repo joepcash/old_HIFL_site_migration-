@@ -1,8 +1,11 @@
+import logging
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
-import logging
-import urllib.request, urllib.error, urllib.parse
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

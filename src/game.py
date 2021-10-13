@@ -14,6 +14,7 @@ class Game:
         self.filepath = None
         self.date = None
         self.season = None
+        self.competition = None
         self.game_str = None
         self.home_team = None
         self.home_score = None
@@ -22,11 +23,13 @@ class Game:
         self.goals_str = None
         self.scorers = None
 
-    def prepare(self, url, filepath, date, season, game_str, home_team, home_score, away_score, away_team, goals_str=None):
+    def prepare(self, url, filepath, date, season, competition, game_str, home_team, home_score,
+                away_score, away_team, goals_str=None):
         self.url = url
         self.filepath = filepath
         self.date = date
         self.season = season
+        self.competition = competition
         self.game_str = game_str
         self.home_team = self._get_team_name(home_team)
         self.home_score = int(home_score)
@@ -108,3 +111,11 @@ class Game:
                 scorers[i]["goals"] = 1
 
         return scorers
+
+    def __eq__(self, other):
+        return all([isinstance(other, Game),
+                    self.date == other.date,
+                    self.home_team == other.home_team,
+                    self.away_team == other.away_team,
+                    self.home_score == other.home_score,
+                    self.away_score == other.away_score])
