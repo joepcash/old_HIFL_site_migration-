@@ -174,8 +174,13 @@ class BlogPost:
 
     @staticmethod
     def find_games_in_text(html_text):
-        return re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) ?[–-] ?([\d]{1,2}).? (.*?)(?: *\(|\n|$)(?:(.*?)\))?)",
-                          html_text)
+        games = re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) ?[–-] ?([\d]{1,2}).? (.*?)(?: *\(|\n|$)(?:(.+)\))?)",
+                           html_text)
+        games = [list(g) for g in games]
+        for i in range(len(games)):
+            games[i][0] = re.sub(r" \(agg [\d]{1,2}-[\d]{1,2}\)", "", games[i][0])
+            games[i][-1] = re.sub(r"\) \(agg [\d]{1,2}-[\d]{1,2}", "", games[i][-1])
+        return games
 
     @staticmethod
     def _get_scorers_str(games, html_text):
