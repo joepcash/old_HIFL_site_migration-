@@ -1,0 +1,4 @@
+/data/
+.idea/*
+__pycache__/
+logging_config.json
