@@ -5,6 +5,7 @@ import pandas as pd
 import html2text
 import os
 import numpy as np
+import requests
 
 from src.game import Game
 
@@ -88,9 +89,12 @@ class BlogPost:
 
     def get_table(self):
         html_table = self.post_html.find("table")
-        if html_table is None:
-            return
+        iframe = self.post_html.find("iframe")
+        if iframe:
+            url = iframe.get("src")
         else:
+            url = ""
+        if html_table:
             table = pd.read_html(str(html_table))[-1]
             table = table.dropna(axis=1, how='all')
             if table.duplicated().any():
@@ -101,6 +105,17 @@ class BlogPost:
             if 'Team' not in table:
                 table = table.rename(columns={table.select_dtypes(exclude=np.number).columns[0]: "Team"})
             self.table = table
+        elif "docs.google.com/spreadsheet" in url:
+            r = requests.get(url)
+            redirect_url = r.url
+            sheet_id = redirect_url.split("/")[redirect_url.split("/").index("d") + 1]
+            gid = 0
+            table_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&gid={gid}"
+            self.table = pd.read_csv(table_url)
+            self.table = self.table.loc[:, ~self.table.columns.str.contains('^Unnamed')].rename(
+                columns={"#": "Rank", "W": "Won", "D": "Draw", "L": "Loss", "GD": "Goal difference", "Pts": "Points"})
+        else:
+            return
 
     def get_teams(self):
         if self.table is None:
@@ -174,11 +189,17 @@ class BlogPost:
 
     @staticmethod
     def find_games_in_text(html_text):
-        games = re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) ?[–-] ?([\d]{1,2}).? (.*?)(?: *\(|\n|$)(?:(.+)\))?)",
+        games1 = re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) {0,2}[–-] {0,2}([\d]{1,2}).? (.+?)(?:$|\()(?:(.+)\))?)",
+                           html_text, re.MULTILINE)
+        games1 = [list(g) for g in games1]
+        games2 = re.findall(r"(?: *\d. *)?((.*?) ([\d]{1,2}) ?[–-] ?(.+?) ([\d]{1,2}))(?: *\n)",
                            html_text)
-        games = [list(g) for g in games]
+        games2 = [[g[0], g[1], g[2], g[4], g[3], ""] for g in games2]
+        games =  games1 + games2
         for i in range(len(games)):
             games[i][0] = re.sub(r" \(agg [\d]{1,2}-[\d]{1,2}\)", "", games[i][0])
+            games[i][1] = games[i][1].strip()
+            games[i][4] = games[i][4].strip()
             games[i][-1] = re.sub(r"\) \(agg [\d]{1,2}-[\d]{1,2}", "", games[i][-1])
         return games
 
@@ -201,3 +222,20 @@ class BlogPost:
                 games[j].append(None)
 
         return games
+
+    def get_cup_participants(self):
+        # Convert html to text
+        html_text = html2text.html2text(str(self.post_html))
+        # Remove bold markers
+        html_text = html_text.replace("**", "")
+        # Remove underscores
+        html_text = html_text.replace("_", "")
+        # Remove odd situation where word "team" gets split up
+        html_text = html_text.replace("Tea m", "Team")
+        # Remove empty lines
+        html_text = os.linesep.join([s for s in html_text.splitlines() if s and not s.isspace()])
+
+        games = re.findall(r"(?:[\d]{1,2}). (.*) vs. (.*)", html_text)
+        teams = [t for g in games for t in g]
+
+        return {"season": self.season, "teams": teams}

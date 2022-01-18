@@ -10,6 +10,7 @@ import pandas as pd
 from blog import Blog
 from page import Page
 from season import Season
+from compute_missing_games import compute_missing_games
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def get_all_games() -> None:
         filename = os.fsdecode(file)
         filepath = os.path.join(page_dir, filename)
         page = Page(None, filepath)
+        # page = Page(None, "data/pages/page28.html")
         page.get_blog_posts("local")
         for bp in page.blog_posts:
             blog_posts.append(bp)
@@ -58,6 +60,17 @@ def get_all_games() -> None:
                 games.append(game)
         logger.info(f"{filename} complete")
     games_df = pd.DataFrame(games)
+    missing_games_14_15_1 = [bp for bp in blog_posts if bp.title in ["Position", "Week 2 - Two perfect records survive.",
+                                                         "Week 3 - Three teams go three games undefeated.",
+                                                         "Week 4: Especially four you."]
+                  and bp.season == "2014/15"]
+    missing_games_14_15_1 = compute_missing_games(missing_games_14_15_1, True)
+    games_df = pd.concat([games_df, missing_games_14_15_1])
+    missing_games_14_15_2 = [bp for bp in blog_posts if
+                             bp.title in ["Week 14 - Crawling to the finish line", "Final Table"]
+                             and bp.season == "2014/15"]
+    missing_games_14_15_2 = compute_missing_games(missing_games_14_15_2, False)
+    games_df = pd.concat([games_df, missing_games_14_15_2])
     games_df.to_csv("data/games/games.csv", index=False)
     logger.info("Got all games")
 
@@ -87,7 +100,49 @@ def get_final_table_all_seasons() -> None:
     logger.info("Got all final tables")
 
 
+def get_cup_participants() -> None:
+    logger.info("Getting cup participants")
+    page_dir = "data/pages"
+    cup_participants = []
+    for file in os.listdir(page_dir):
+        filename = os.fsdecode(file)
+        filepath = os.path.join(page_dir, filename)
+        page = Page(None, filepath)
+        blog_posts = page.get_cup_posts("local")
+        for bp in blog_posts:
+            cup_participants.append(bp.get_cup_participants())
+        logger.info(f"{filename} complete")
+    cup_participants = [c for c in cup_participants if c["teams"]]
+    logger.info("Got all cup participants")
+
+
 def get_games_by_season() -> None:
+    games_df = pd.read_csv("data/games/games.csv")
+    missing_games_df = pd.read_csv("data/games/missing_games.csv")
+    corrected_games_df = pd.read_csv("data/games/corrected_games.csv")
+    games_df = pd.concat([games_df, missing_games_df])
+    games_df = games_df.set_index(["home_team", "away_team", "season", "competition"])
+    corrected_games_df = corrected_games_df.set_index(["home_team", "away_team", "season", "competition"])
+    games_df.update(corrected_games_df)
+    games_df.reset_index(inplace=True)
+    page_dir = "data/final_tables"
+    seasons = []
+    for file in os.listdir(page_dir):
+        filename = os.fsdecode(file)
+        filepath = os.path.join(page_dir, filename)
+        season_name = Path(filename).stem.replace('_', '/')
+        df = pd.read_csv(filepath)
+        season_games = games_df[(games_df['season'] == season_name) & (games_df["competition"] == "league")]
+        season = Season(season_name, df, season_games)
+        season.fix_team_name_variation()
+        season.drop_dropouts()
+        season.remove_void_games()
+        season.fix_duplicate_missing_games()
+        season.play_season()
+        seasons.append(season)
+
+
+def find_missing_games() -> None:
     games_df = pd.read_csv("data/games/games.csv")
     page_dir = "data/final_tables"
     seasons = []
@@ -96,10 +151,11 @@ def get_games_by_season() -> None:
         filepath = os.path.join(page_dir, filename)
         season_name = Path(filename).stem.replace('_', '/')
         df = pd.read_csv(filepath)
-        season_games = games_df[games_df['season'] == season_name]
+        season_games = games_df[(games_df['season'] == season_name) & (games_df["competition"] == "league")]
         season = Season(season_name, df, season_games)
         season.fix_team_name_variation()
-        # seasons.append(season)
+        season.find_missing_games()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -109,7 +165,9 @@ if __name__ == "__main__":
                             "get_all_players",
                             "get_all_games",
                             "get_all_final_tables",
-                            "play_seasons"
+                            "play_seasons",
+                            "get_cup_participants",
+                            "find_missing_games"
                         ])
     parser.add_argument("-b", type=str, default="http://hanoiinternationalfootballleague.blogspot.com/",
                         dest="blog_url", help="URL of the blog to operate on")
@@ -126,3 +184,7 @@ if __name__ == "__main__":
         get_final_table_all_seasons()
     elif args.operation == "play_seasons":
         get_games_by_season()
+    elif args.operation == "get_cup_participants":
+        get_cup_participants()
+    elif args.operation == "find_missing_games":
+        find_missing_games()

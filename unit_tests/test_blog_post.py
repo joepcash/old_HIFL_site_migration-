@@ -148,3 +148,33 @@ Post")
         blog_post.get_all_games_in_post(False)
         expected = [Game().prepare("", "", "", "", "", "Drink 3 – 0 FPT  \n", 'Drink', '3', '0', "FPT", "")]
         self.assertEqual(expected, blog_post.games)
+
+    def test_get_games_with_score_after_team_name(self):
+        text = """HSS 0 – Drink 7  
+Goals: Drink: Huy (3), Olivier (2), Thang Jr, Hughes."""
+        blog_post = BlogPost("", "", "", "", "")
+        result = blog_post.find_games_in_text(text)
+        expected = [["HSS 0 – Drink 7", 'HSS', '0', '7', "Drink", ""]]
+        self.assertEqual(result, expected)
+
+    def test_get_games_with_numbered_list_and_no_scorers_after_one_game(self):
+        text = """  1. Minsk 1-1 Hanoi Capitals (Rasta ; Frej)
+  2. Drink Team 0-0 Nguyễn Trãi FC
+  3. FC Thống Nhất 2-1 Roots FC (Hữu Minh 15', 37' ; Manu 85')"""
+        blog_post = BlogPost("", "", "", "", "")
+        result = blog_post.find_games_in_text(text)
+        expected = [["Minsk 1-1 Hanoi Capitals (Rasta ; Frej)", 'Minsk', '1', '1', "Hanoi Capitals", "Rasta ; Frej"],
+                    ["Drink Team 0-0 Nguyễn Trãi FC", 'Drink Team', '0', '0', "Nguyễn Trãi FC", ""],
+                    ["FC Thống Nhất 2-1 Roots FC (Hữu Minh 15', 37' ; Manu 85')", 'FC Thống Nhất', '2', '1', "Roots FC",
+                     "Hữu Minh 15', 37' ; Manu 85'"]]
+        self.assertEqual(expected, result)
+
+    def test_get_games_with_doublespace_in_score(self):
+        text = """ Capitals  7  – 2 Brothers
+Goals: Capitals: Josh (3), Pete,Lucas, Renato, Martin  Brothers: Ngọc Quang (2)
+Yellow card : Capitals(John) Brothers (Quyên, Cương)
+Red Card (Tjerk)"""
+        blog_post = BlogPost("", "", "", "", "")
+        actual = blog_post.find_games_in_text(text)
+        expected = [[" Capitals  7  – 2 Brothers", 'Capitals', '7', '2', "Brothers", ""]]
+        self.assertEqual(expected, actual)
